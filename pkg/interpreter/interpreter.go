@@ -130,7 +130,26 @@ func (i *InterpreterState) Step(s int) bool {
   case NOT_OP :
     i.State[s] = ^v0
   case SET_OP :
-    // This one is more complex
+    cc := instruction.Cnd
+    i.State[s] = 0
+    switch{
+    case (cc == CC_LS ) && (v0 <  v1):
+      i.State[s] = 1
+    case (cc == CC_GT ) && (v0 >  v1):
+      i.State[s] = 1
+    case (cc == CC_LSE) && (v0 <= v1):
+      i.State[s] = 1
+    case (cc == CC_GTE) && (v0 >= v1):
+      i.State[s] = 1
+    case (cc == CC_EQ)  && (v0 == v1):
+      i.State[s] = 1
+    case (cc == CC_NE)  && (v0 == v1):
+      i.State[s] = 1
+    case (cc == CC_E0)  && (v0 == 0):
+      i.State[s] = 1
+    case (cc == CC_E1)  && (v0 == 1):
+      i.State[s] = 1
+    }
   case PCT_OP :
     i.State[s] = int64(bits.OnesCount64(uint64(v0)))
   case CTZ_OP :
