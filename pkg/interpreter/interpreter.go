@@ -1,87 +1,41 @@
 package interpreter
 
-import "math/bits"
+import (
+  "math/bits"
 
-
-
-/*
-  Opcodes
-*/
-const (
-  ADD_OP  = iota //commutative
-  SUB_OP  = iota //eq=0
-  MUL_OP  = iota //commutative
-  DIV_OP  = iota //eq=1/err, divmod
-  MOD_OP  = iota //takes 1 parameter, must be output of div, zero latency
-  SHL_OP  = iota
-  SHR_OP  = iota
-  RTL_OP  = iota
-  RTR_OP  = iota
-  XOR_OP  = iota //commutative, eq=0
-  AND_OP  = iota //commutative, eq=x
-  OR_OP   = iota //commutative, eq=x
-  NOT_OP  = iota
-  SET_OP  = iota
-  CMP_OP  = iota
-  PCT_OP  = iota
-  CTZ_OP  = iota
-  CLZ_OP  = iota
-  CMOV_OP = iota
-  LEA0_OP = iota //a + (b * [1, 2, 4, 8]) + k
-  LEA1_OP = iota //a + (b * [1, 2, 4, 8]) + c
-  CNST_OP = iota
-  PAR_OP  = iota
-  RET_OP  = iota
+  "github.com/charlesrosenbauer/superoptimization/pkg/program"
 )
 
-/*
-  Condition Codes
-*/
-const (
-  CC_LS  = iota //eq=f
-  CC_GT  = iota //eq=f
-  CC_EQ  = iota //commutative, eq=t
-  CC_NE  = iota //commutative, eq=f
-  CC_LSE = iota //eq=t
-  CC_GTE = iota //eq=t
-  CC_E0  = iota
-  CC_E1  = iota
-  //CC_OVF = iota //Overflow? I have no idea how to handle this one
-)
 
-type Opcode  int8
 
-type Regcode int8
 
-type Cndcode int8
-
-type Instruction struct {
-  Op  Opcode
-  Cnd Cndcode
-  R0  Regcode
-  R1  Regcode
-  R2  Regcode
-  Im0 int64
-  Im1 int64
-}
 
 
 type InterpreterState struct {
-  InCode   [32]Instruction
-  TestCode [32]Instruction
+  InitCode program.Program
+  OptmCode program.Program
   State    [32]int64
   Inputs   [8] int64
   Outputs  [8] int64
-  InSize   int
-  TestSize int
   TestData [2][8][64]int64  // 32 input-output sets, up to 8 inputs, 8 outputs each
   TestFail [64]bool         // Some tests are expected to fail, e.g, divide-by-zero errors
 }
 
+func (i *InterpreterState) StepOptm(s int) bool {
 
-func (i *InterpreterState) Step(s int) bool {
+  return i.Step(&i.OptmCode, s)
+}
 
-  instruction := i.InCode[s]
+
+func (i *InterpreterState) StepInit(s int) bool {
+
+  return i.Step(&i.InitCode, s)
+}
+
+
+func (i *InterpreterState) Step(p *program.Program, s int) bool {
+
+  instruction := p.Code[s]
   op := instruction.Op
   r0 := instruction.R0
   r1 := instruction.R1
@@ -93,86 +47,86 @@ func (i *InterpreterState) Step(s int) bool {
   v1 := i.State[r1]
 
   switch op {
-  case ADD_OP :
+  case program.ADD_OP :
     i.State[s] = v0 + v1
-  case SUB_OP :
+  case program.SUB_OP :
     i.State[s] = v0 - v1
-  case MUL_OP :
+  case program.MUL_OP :
     i.State[s] = v0 * v1
-  case DIV_OP :
+  case program.DIV_OP :
     if i.State[r1] != 0 {
       i.State[s] = v0 / v1
     }else{
       return false
     }
-  case MOD_OP :
-    dr0 := i.State[i.InCode[r0].R0]
-    dr1 := i.State[i.InCode[r0].R1]
+  case program.MOD_OP :
+    dr0 := i.State[p.Code[r0].R0]
+    dr1 := i.State[p.Code[r0].R1]
     if dr1 != 0 {
       i.State[s] = dr0 % dr1
     }else{
       return false
     }
-  case SHL_OP :
+  case program.SHL_OP :
     i.State[s] = int64(uint64(v0) << uint64(v1))
-  case SHR_OP :
+  case program.SHR_OP :
     i.State[s] = int64(uint64(v0) >> uint64(v1))
-  case RTL_OP :
+  case program.RTL_OP :
     i.State[s] = int64(bits.RotateLeft64(uint64(v0), int( v1) ))
-  case RTR_OP :
+  case program.RTR_OP :
     i.State[s] = int64(bits.RotateLeft64(uint64(v0), int(-v1) ))
-  case XOR_OP :
+  case program.XOR_OP :
     i.State[s] = v0 ^ v1
-  case AND_OP :
+  case program.AND_OP :
     i.State[s] = v0 & v1
-  case OR_OP  :
+  case program.OR_OP  :
     i.State[s] = v0 | v1
-  case NOT_OP :
+  case program.NOT_OP :
     i.State[s] = ^v0
-  case SET_OP :
+  case program.SET_OP :
     cc := instruction.Cnd
     i.State[s] = 0
     switch{
-    case (cc == CC_LS ) && (v0 <  v1):
+    case (cc == program.CC_LS ) && (v0 <  v1):
       i.State[s] = 1
-    case (cc == CC_GT ) && (v0 >  v1):
+    case (cc == program.CC_GT ) && (v0 >  v1):
       i.State[s] = 1
-    case (cc == CC_LSE) && (v0 <= v1):
+    case (cc == program.CC_LSE) && (v0 <= v1):
       i.State[s] = 1
-    case (cc == CC_GTE) && (v0 >= v1):
+    case (cc == program.CC_GTE) && (v0 >= v1):
       i.State[s] = 1
-    case (cc == CC_EQ)  && (v0 == v1):
+    case (cc == program.CC_EQ)  && (v0 == v1):
       i.State[s] = 1
-    case (cc == CC_NE)  && (v0 == v1):
+    case (cc == program.CC_NE)  && (v0 == v1):
       i.State[s] = 1
-    case (cc == CC_E0)  && (v0 == 0):
+    case (cc == program.CC_E0)  && (v0 == 0):
       i.State[s] = 1
-    case (cc == CC_E1)  && (v0 == 1):
+    case (cc == program.CC_E1)  && (v0 == 1):
       i.State[s] = 1
     }
-  case PCT_OP :
+  case program.PCT_OP :
     i.State[s] = int64(bits.OnesCount64(uint64(v0)))
-  case CTZ_OP :
+  case program.CTZ_OP :
     i.State[s] = int64(bits.TrailingZeros64(uint64(v0)))
-  case CLZ_OP :
+  case program.CLZ_OP :
     i.State[s] = int64(bits.LeadingZeros64(uint64(v0)))
-  case CMOV_OP :
+  case program.CMOV_OP :
     v2 := i.State[instruction.R2]
     if v0 == 0 {
       i.State[s] = v1
     }else{
       i.State[s] = v2
     }
-  case LEA0_OP :
+  case program.LEA0_OP :
     i.State[s] = v0 + (instruction.Im0 * v1) + instruction.Im1
-  case LEA1_OP :
+  case program.LEA1_OP :
     v2 := i.State[instruction.R2]
     i.State[s] = v0 + (instruction.Im0 * v1) + v2
-  case CNST_OP :
+  case program.CNST_OP :
     i.State[s] = instruction.Im0
-  case PAR_OP :
+  case program.PAR_OP :
     i.State[s] = i.Inputs[r0]
-  case RET_OP :
+  case program.RET_OP :
     i.Outputs[r0] = v0
   }
 
