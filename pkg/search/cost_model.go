@@ -9,7 +9,7 @@ import (
 
 
 
-func (p *program.Program) ApproxCost(){
+func (p *program.Program) ApproxCost() int {
 
   cost := 0
   for i := 0; i < p.Size; i++ {
