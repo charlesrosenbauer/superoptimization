@@ -35,6 +35,7 @@ const (
   Condition Codes
 */
 const (
+  CC_VD  = iota //default
   CC_LS  = iota //eq=f
   CC_GT  = iota //eq=f
   CC_EQ  = iota //commutative, eq=t
